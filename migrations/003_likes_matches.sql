@@ -1,0 +1,21 @@
+USE sakina;
+CREATE TABLE IF NOT EXISTS likes (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  liker_id BIGINT UNSIGNED NOT NULL,
+  liked_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_like (liker_id, liked_id),
+  FOREIGN KEY (liker_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (liked_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS matches (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_a BIGINT UNSIGNED NOT NULL,
+  user_b BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  UNIQUE KEY uniq_pair (user_a, user_b)
+) ENGINE=InnoDB;
+
+-- Ensure uniq_pair is order-independent by inserting with (LEAST, GREATEST) in app layer.
