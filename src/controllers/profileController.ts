@@ -34,6 +34,8 @@ const UpdateSchema = z.object({
   wali_contact: z.string().optional(), // plaintext from user
   bio: z.string().max(500).optional(),
   photo_url: z.string().url().optional(),
+  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+  location_visibility: z.enum(["hidden", "approx_city", "exact"]).optional(),
 });
 
 export async function updateMyProfile(req: Request, res: Response) {
@@ -43,15 +45,34 @@ export async function updateMyProfile(req: Request, res: Response) {
     return res.status(400).json({ error: parsed.error.flatten() });
   const p = parsed.data;
   const enc = p.wali_contact ? encrypt(p.wali_contact) : null;
+  const visibility = p.location_visibility ?? "approx_city";
+
   await pool.query(
-    `INSERT INTO profiles (user_id, display_name, dob, country, city, madhhab, prayer_level, marital_status,
-       wali_name, wali_relation, wali_contact_encrypted, bio, photo_url)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       display_name=VALUES(display_name), dob=VALUES(dob), country=VALUES(country), city=VALUES(city),
-       madhhab=VALUES(madhhab), prayer_level=VALUES(prayer_level), marital_status=VALUES(marital_status),
-       wali_name=VALUES(wali_name), wali_relation=VALUES(wali_relation),
-       wali_contact_encrypted=VALUES(wali_contact_encrypted), bio=VALUES(bio), photo_url=VALUES(photo_url)`,
+    `INSERT INTO profiles (
+     user_id, display_name, dob, country, city, madhhab, prayer_level, marital_status,
+     wali_name, wali_relation, wali_contact_encrypted, bio, photo_url, location_visibility, location
+   )
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+     ${p.location ? "ST_SRID(POINT(?, ?), 4326)" : "NULL"}
+   )
+   ON DUPLICATE KEY UPDATE
+     display_name=VALUES(display_name),
+     dob=VALUES(dob),
+     country=VALUES(country),
+     city=VALUES(city),
+     madhhab=VALUES(madhhab),
+     prayer_level=VALUES(prayer_level),
+     marital_status=VALUES(marital_status),
+     wali_name=VALUES(wali_name),
+     wali_relation=VALUES(wali_relation),
+     wali_contact_encrypted=VALUES(wali_contact_encrypted),
+     bio=VALUES(bio),
+     photo_url=VALUES(photo_url),
+     location_visibility=VALUES(location_visibility),
+     location=${
+       p.location ? "ST_SRID(POINT(?, ?), 4326)" : "location"
+     } -- only update if provided
+  `,
     [
       req.user.id,
       p.display_name,
@@ -66,7 +87,11 @@ export async function updateMyProfile(req: Request, res: Response) {
       enc,
       p.bio || null,
       p.photo_url || null,
+      visibility,
+      ...(p.location ? [p.location.lng, p.location.lat] : []),
+      ...(p.location ? [p.location.lng, p.location.lat] : []), // for the UPDATE part
     ]
   );
+
   res.json({ ok: true });
 }
